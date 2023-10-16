@@ -11,12 +11,17 @@ from langchain.embeddings import OpenAIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.vectorstores.faiss import FAISS
 from langchain.retrievers.multi_query import MultiQueryRetriever
+import weaviate
+from langchain.retrievers.weaviate_hybrid_search import WeaviateHybridSearchRetriever
 from dotenv import load_dotenv
 
 load_dotenv()
+
 st.set_page_config(page_title="Ask me anything (Alpha)", page_icon="🦜",layout="wide",initial_sidebar_state="expanded")
 st.title("🦜 Ask me anything (Alpha)")
 
+WEAVIATE_URL = os.getenv("WEAVIATE_URL")
+auth_client_secret = weaviate.AuthApiKey(api_key=os.getenv("WEAVIATE_API_KEY"))
 
 @st.cache_resource(ttl="1h")
 def configure_retriever(uploaded_files):
@@ -34,12 +39,28 @@ def configure_retriever(uploaded_files):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
     splits = text_splitter.split_documents(docs)
 
-    embeddings = OpenAIEmbeddings()
-    vectorstore = FAISS.from_documents(splits, embeddings)
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 6})
-    llm = ChatOpenAI(
-        model_name="gpt-3.5-turbo", temperature=0, streaming=True
+    client = weaviate.Client(
+        url=WEAVIATE_URL,
+        additional_headers={
+            "X-Openai-Api-Key": os.getenv("OPENAI_API_KEY"),
+        },
+        auth_client_secret=auth_client_secret
     )
+    # delete class "YourClassName" - THIS WILL DELETE ALL DATA IN THIS CLASS
+    client.schema.delete_class("askmeanything")  # Replace with your class name - e.g. "Question"
+
+    retriever = WeaviateHybridSearchRetriever(
+        client=client,
+        index_name="askmeanything",
+        text_key="text",
+        attributes=[],
+        create_schema_if_missing=True,
+    )
+
+    retriever.add_documents(splits)
+
+    llm = ChatOpenAI(temperature=0,model_name="gpt-3.5-turbo-16k")
+
     retriever_from_llm = MultiQueryRetriever.from_llm(
         retriever=retriever, llm=llm
     )
@@ -96,7 +117,7 @@ memory = ConversationBufferMemory(memory_key="chat_history", chat_memory=msgs, r
 
 # Setup LLM and QA chain
 llm = ChatOpenAI(
-    model_name="gpt-3.5-turbo", temperature=0, streaming=True
+    model_name="gpt-3.5-turbo", temperature=0, streaming=True,
 )
 qa_chain = ConversationalRetrievalChain.from_llm(
     llm, retriever=retriever, memory=memory, verbose=True
