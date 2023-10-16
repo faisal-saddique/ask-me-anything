@@ -6,3 +6,4 @@ pymupdf==1.22.5
 faiss-cpu==1.7.4
 pypdf==3.12.1
 tiktoken==0.3.3
+weaviate-client==3.24.2
