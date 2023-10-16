@@ -47,7 +47,7 @@ def configure_retriever(uploaded_files):
         auth_client_secret=auth_client_secret
     )
     # delete class "YourClassName" - THIS WILL DELETE ALL DATA IN THIS CLASS
-    client.schema.delete_class("askmeanything")  # Replace with your class name - e.g. "Question"
+    # client.schema.delete_class("askmeanything")  # Replace with your class name - e.g. "Question"
 
     retriever = WeaviateHybridSearchRetriever(
         client=client,
